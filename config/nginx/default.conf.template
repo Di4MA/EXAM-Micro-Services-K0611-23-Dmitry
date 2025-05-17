@@ -1,0 +1,46 @@
+upstream user-upstream {
+    server user-service:80;
+}
+
+upstream core-upstream {
+    server core-service:80;
+}
+
+map $http_x_rpc_method $routing_for_rpc_method {
+   hostnames;
+   user.* user-upstream;
+   default core-upstream;
+} 
+
+server {
+    listen 80;
+    root /service/frontend;
+    
+    location / {
+        root /service/frontend;
+        index index.html index.html;
+    }
+
+    location /rpc {
+        client_max_body_size 32;
+        client_body_timeout 1;
+
+        if ($request_method != 'POST'){
+            return 405;
+        }
+        
+        if ($http_x_service_account != 'service-account') {
+            return 401;
+        }
+
+        if ($http_x_service_credentials = ''){
+            return 401;
+        }
+
+        if ($http_content_type != 'application/json'){
+            return 400;
+        }
+
+        proxy_pass http://$routing_for_rpc_method;
+    }
+}
